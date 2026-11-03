@@ -6,38 +6,53 @@ Rolling Credits records who worked on something, and routes the money it earns b
 
 ## Status
 
-**Devnet proof of concept.** The credits program (create production, propose credit, accept credit) is deployed on Solana devnet. Everything else is still planned.
-
-- Program ID (devnet): `EEXBANe3p9Y6CRZ1PENKkdxrEBHsGhYi3VoqxPHHFuEk`
-- Explorer: https://explorer.solana.com/address/EEXBANe3p9Y6CRZ1PENKkdxrEBHsGhYi3VoqxPHHFuEk?cluster=devnet
+**Devnet proofs of concept.** Two programs are deployed on Solana devnet, each with passing tests and a published IDL. Everything else is still planned.
 
 This is devnet only. It is unaudited and should not hold real funds.
 
+| Program | Devnet program ID | Explorer |
+| --- | --- | --- |
+| Credits | `EEXBANe3p9Y6CRZ1PENKkdxrEBHsGhYi3VoqxPHHFuEk` | https://explorer.solana.com/address/EEXBANe3p9Y6CRZ1PENKkdxrEBHsGhYi3VoqxPHHFuEk?cluster=devnet |
+| Splits | `EsYnYU2o5tzeWR78Z48jRgbAqWQHPubokY33ecBZctUN` | https://explorer.solana.com/address/EsYnYU2o5tzeWR78Z48jRgbAqWQHPubokY33ecBZctUN?cluster=devnet |
+
 | Component | Status |
 | --- | --- |
-| `credits` program: create, propose, accept | Devnet PoC |
+| `credits` program: create production, propose credit, accept credit | Devnet PoC, 5 tests passing |
 | `credits` program: decline, revoke | Planned |
-| `splits` program | Planned |
+| `splits` program: create split, add recipient, lock, claim (SOL only) | Devnet PoC, 9 tests passing |
+| `splits` program: SPL tokens such as USDC | Planned |
 | TypeScript SDK | Planned |
 | React Native hooks (Mobile Wallet Adapter) | Planned |
 | Public indexer and adoption dashboard | Planned |
 | Security review | Planned |
 | Ourobor.OS integration | Planned |
 
-## What the proof of concept does
+## What the proofs of concept do
+
+**Credits**
 
 - An owner creates a production onchain.
 - The owner proposes a credit to a contributor's wallet, with a role such as Gaffer.
 - The contributor accepts with their own signature, and the credit becomes verified.
-- A wallet that isn't the credited contributor can't accept it.
-- A credit that has already been accepted can't be accepted again.
+- A wallet that isn't the credited contributor can't accept it, and a credit can't be accepted twice.
 
-The proof of concept is a first slice of the design in [SPEC.md](SPEC.md). Decline, revoke and the revoke flags on the Credit account are in the spec but not built yet.
+**Splits**
+
+- An authority creates a split and adds recipients with shares in basis points, for example 7,000 and 3,000.
+- Shares can't add up to more than 10,000, and can't be changed once the split is locked.
+- Locking needs shares to add up to exactly 10,000.
+- Anyone can send SOL to the split's address. Each recipient claims their share when they like.
+- Claims are refused before the lock, and a repeat claim with nothing new is refused.
+- Revenue that arrives after a claim is paid out correctly on the next claim.
+
+The splits proof of concept differs from SPEC.md in one way. It holds SOL in the split account itself, where the full design uses a vault for SPL tokens.
 
 ## Repo layout
 
-- `programs/rolling-credits/src/lib.rs`: the Anchor program.
+- `programs/rolling-credits/src/lib.rs`: the credits program.
+- `programs/rolling-splits/src/lib.rs`: the splits program.
 - `tests/rolling-credits.ts`: five tests, written for Solana Playground.
+- `tests/rolling-splits.ts`: nine tests, written for Solana Playground.
 - `SPEC.md`: the full design and open questions.
 
 ## Run the tests
@@ -45,11 +60,11 @@ The proof of concept is a first slice of the design in [SPEC.md](SPEC.md). Decli
 The tests run in Solana Playground for now. Moving to a standard `anchor test` setup is on the roadmap.
 
 1. Open beta.solpg.io and create a new Anchor (Rust) project.
-2. Paste in `lib.rs` and the test file.
+2. Paste in the program's `lib.rs` and its test file.
 3. Build, then deploy to devnet with a funded Playground wallet.
 4. Type `test` in the terminal.
 
-Five passing tests is the expected result.
+Expected results are five passing tests for credits and nine for splits.
 
 ## The problem
 
@@ -61,7 +76,7 @@ Creative work makes this worse. A film crew is 20 to 80 people. Money arrives fr
 
 **Credits.** A production owner proposes a credit to a contributor's wallet. The contributor accepts with their own signature. The credit is now verified, readable by any app or program.
 
-**Splits (planned).** A split holds each recipient's share in basis points, summing to 10,000. Its vault accepts any SPL token, typically USDC, from anyone. Recipients claim what they're owed, whenever they like. Shares lock once revenue arrives, so earned money can't be redirected.
+**Splits.** A split holds each recipient's share in basis points, summing to 10,000. Anyone can pay into it. Recipients claim what they're owed, whenever they like. Shares lock once set, so earned money can't be redirected.
 
 The two programs are independent. Use credits without splits, or splits without credits, or link them so verified credits seed the split.
 
@@ -73,8 +88,8 @@ Splitting a $10 licence fee across 60 people means 60 payments of a few cents ea
 
 ## Roadmap
 
-1. **Credits program beta.** Complete the credits instructions, move to a standard Anchor test setup, and run a devnet trial with external users.
-2. **Splits program beta.** Claim maths tested to 80 recipients, independent security review published, mainnet deploy.
+1. **Finish credits.** Decline and revoke, a standard Anchor test setup, and a devnet trial with external users.
+2. **Splits with SPL tokens.** USDC support, claim maths tested to 80 recipients, independent security review published, mainnet deploy.
 3. **SDK, mobile hooks and indexer.** SDK on npm, end-to-end test on Seeker, public dashboard.
 4. **Maintenance.** Six months of active support: issues, fixes, compatibility, monthly changelog.
 
