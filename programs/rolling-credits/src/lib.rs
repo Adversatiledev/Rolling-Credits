@@ -40,6 +40,8 @@ pub mod rolling_credits {
         credit.status = CreditStatus::Proposed;
         credit.proposed_at = Clock::get()?.unix_timestamp;
         credit.verified_at = 0;
+        credit.owner_revoke = false;
+        credit.contributor_revoke = false;
         credit.bump = ctx.bumps.credit;
 
         let production = &mut ctx.accounts.production;
@@ -71,6 +73,73 @@ pub mod rolling_credits {
             credit: credit.key(),
             contributor: credit.contributor,
         });
+        Ok(())
+    }
+
+    pub fn decline_credit(ctx: Context<DeclineCredit>) -> Result<()> {
+        let credit = &mut ctx.accounts.credit;
+        require!(
+            credit.status == CreditStatus::Proposed,
+            CreditsError::NotProposed
+        );
+
+        credit.status = CreditStatus::Declined;
+
+        emit!(CreditDeclined {
+            production: credit.production,
+            credit: credit.key(),
+            contributor: credit.contributor,
+        });
+        Ok(())
+    }
+
+    pub fn request_revoke(ctx: Context<ChangeRevoke>) -> Result<()> {
+        let signer = ctx.accounts.signer.key();
+        let owner = ctx.accounts.production.owner;
+        let credit = &mut ctx.accounts.credit;
+        require!(
+            credit.status == CreditStatus::Verified,
+            CreditsError::NotVerified
+        );
+        let is_owner = signer == owner;
+        let is_contributor = signer == credit.contributor;
+        require!(is_owner || is_contributor, CreditsError::Unauthorised);
+
+        if is_owner {
+            credit.owner_revoke = true;
+        }
+        if is_contributor {
+            credit.contributor_revoke = true;
+        }
+        if credit.owner_revoke && credit.contributor_revoke {
+            credit.status = CreditStatus::Revoked;
+            emit!(CreditRevoked {
+                production: credit.production,
+                credit: credit.key(),
+                contributor: credit.contributor,
+            });
+        }
+        Ok(())
+    }
+
+    pub fn cancel_revoke(ctx: Context<ChangeRevoke>) -> Result<()> {
+        let signer = ctx.accounts.signer.key();
+        let owner = ctx.accounts.production.owner;
+        let credit = &mut ctx.accounts.credit;
+        require!(
+            credit.status == CreditStatus::Verified,
+            CreditsError::NotVerified
+        );
+        let is_owner = signer == owner;
+        let is_contributor = signer == credit.contributor;
+        require!(is_owner || is_contributor, CreditsError::Unauthorised);
+
+        if is_owner {
+            credit.owner_revoke = false;
+        }
+        if is_contributor {
+            credit.contributor_revoke = false;
+        }
         Ok(())
     }
 }
@@ -117,6 +186,21 @@ pub struct AcceptCredit<'info> {
     pub contributor: Signer<'info>,
 }
 
+#[derive(Accounts)]
+pub struct DeclineCredit<'info> {
+    #[account(mut, has_one = contributor)]
+    pub credit: Account<'info, Credit>,
+    pub contributor: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct ChangeRevoke<'info> {
+    #[account(mut, has_one = production)]
+    pub credit: Account<'info, Credit>,
+    pub production: Account<'info, Production>,
+    pub signer: Signer<'info>,
+}
+
 #[account]
 #[derive(InitSpace)]
 pub struct Production {
@@ -140,6 +224,8 @@ pub struct Credit {
     pub status: CreditStatus,
     pub proposed_at: i64,
     pub verified_at: i64,
+    pub owner_revoke: bool,
+    pub contributor_revoke: bool,
     pub bump: u8,
 }
 
@@ -171,6 +257,20 @@ pub struct CreditVerified {
     pub contributor: Pubkey,
 }
 
+#[event]
+pub struct CreditDeclined {
+    pub production: Pubkey,
+    pub credit: Pubkey,
+    pub contributor: Pubkey,
+}
+
+#[event]
+pub struct CreditRevoked {
+    pub production: Pubkey,
+    pub credit: Pubkey,
+    pub contributor: Pubkey,
+}
+
 #[error_code]
 pub enum CreditsError {
     #[msg("Slug must be 32 characters or fewer")]
@@ -181,8 +281,12 @@ pub enum CreditsError {
     RoleEmpty,
     #[msg("Role must be 48 characters or fewer")]
     RoleTooLong,
-    #[msg("Only a proposed credit can be accepted")]
+    #[msg("Only a proposed credit can be accepted or declined")]
     NotProposed,
+    #[msg("Only a verified credit can be revoked")]
+    NotVerified,
+    #[msg("Only the production owner or the contributor can do this")]
+    Unauthorised,
     #[msg("Counter overflow")]
     Overflow,
-  }
+}
