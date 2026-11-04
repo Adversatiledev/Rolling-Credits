@@ -6,7 +6,7 @@ Rolling Credits records who worked on something, and routes the money it earns b
 
 ## Status
 
-**Devnet proofs of concept.** Two programs are deployed on Solana devnet, each with passing tests and a published IDL. Everything else is still planned.
+**Devnet proofs of concept.** Two programs are deployed on Solana devnet with passing tests. Everything else is still planned.
 
 This is devnet only. It is unaudited and should not hold real funds.
 
@@ -17,10 +17,11 @@ This is devnet only. It is unaudited and should not hold real funds.
 
 | Component | Status |
 | --- | --- |
-| `credits` program: create production, propose credit, accept credit | Devnet PoC, 5 tests passing |
-| `credits` program: decline, revoke | Planned |
-| `splits` program: create split, add recipient, lock, claim (SOL only) | Devnet PoC, 9 tests passing |
+| `credits` program: create production, propose, accept, decline, request and cancel revoke | Devnet PoC, 8 tests passing |
+| `credits` published IDL | Published for create, propose and accept. Upgrade for decline and revoke pending |
+| `splits` program: create split, add recipient, lock, claim (SOL only) | Devnet PoC, 9 tests passing, IDL published |
 | `splits` program: SPL tokens such as USDC | Planned |
+| Standard Anchor test setup | Planned |
 | TypeScript SDK | Planned |
 | React Native hooks (Mobile Wallet Adapter) | Planned |
 | Public indexer and adoption dashboard | Planned |
@@ -33,8 +34,9 @@ This is devnet only. It is unaudited and should not hold real funds.
 
 - An owner creates a production onchain.
 - The owner proposes a credit to a contributor's wallet, with a role such as Gaffer.
-- The contributor accepts with their own signature, and the credit becomes verified.
-- A wallet that isn't the credited contributor can't accept it, and a credit can't be accepted twice.
+- The contributor accepts with their own signature, and the credit becomes verified. Or the contributor declines it.
+- A wallet that isn't the credited contributor can't accept or decline it, and a declined credit can't be accepted.
+- Either side can ask to revoke a verified credit. It is only revoked when both have asked, and either side can cancel their request before then. A stranger can't ask.
 
 **Splits**
 
@@ -51,8 +53,9 @@ The splits proof of concept differs from SPEC.md in one way. It holds SOL in the
 
 - `programs/rolling-credits/src/lib.rs`: the credits program.
 - `programs/rolling-splits/src/lib.rs`: the splits program.
-- `tests/rolling-credits.ts`: five tests, written for Solana Playground.
-- `tests/rolling-splits.ts`: nine tests, written for Solana Playground.
+- `tests/rolling-credits-revoke.ts`: eight tests for the credits program, covering production setup, propose, accept, decline and revoke. Written for Solana Playground.
+- `tests/rolling-credits.ts`: the original five credits tests. They predate decline and revoke and have not been re-run against the upgraded program.
+- `tests/rolling-splits.ts`: nine tests for the splits program. Written for Solana Playground.
 - `SPEC.md`: the full design and open questions.
 
 ## Run the tests
@@ -64,7 +67,7 @@ The tests run in Solana Playground for now. Moving to a standard `anchor test` s
 3. Build, then deploy to devnet with a funded Playground wallet.
 4. Type `test` in the terminal.
 
-Expected results are five passing tests for credits and nine for splits.
+Public devnet servers rate-limit heavy use. If you see a 429 error, wait a few minutes or use your own RPC endpoint.
 
 ## The problem
 
@@ -74,7 +77,7 @@ Creative work makes this worse. A film crew is 20 to 80 people. Money arrives fr
 
 ## How it works
 
-**Credits.** A production owner proposes a credit to a contributor's wallet. The contributor accepts with their own signature. The credit is now verified, readable by any app or program.
+**Credits.** A production owner proposes a credit to a contributor's wallet. The contributor accepts with their own signature. The credit is now verified, readable by any app or program. Removing a verified credit needs both sides to agree.
 
 **Splits.** A split holds each recipient's share in basis points, summing to 10,000. Anyone can pay into it. Recipients claim what they're owed, whenever they like. Shares lock once set, so earned money can't be redirected.
 
@@ -88,7 +91,7 @@ Splitting a $10 licence fee across 60 people means 60 payments of a few cents ea
 
 ## Roadmap
 
-1. **Finish credits.** Decline and revoke, a standard Anchor test setup, and a devnet trial with external users.
+1. **Finish credits.** Republish the IDL with decline and revoke, move to a standard Anchor test setup, and run a devnet trial with external users.
 2. **Splits with SPL tokens.** USDC support, claim maths tested to 80 recipients, independent security review published, mainnet deploy.
 3. **SDK, mobile hooks and indexer.** SDK on npm, end-to-end test on Seeker, public dashboard.
 4. **Maintenance.** Six months of active support: issues, fixes, compatibility, monthly changelog.
