@@ -141,4 +141,3 @@ describe("Credits decline and revoke", () => {
     assert.ok(c.status.revoked);
   }).timeout(90000);
 });
-
