@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rolling Credits: tap to accept (devnet demo)</title>
+<style>
+:root{--bg:#000;--card:#151515;--line:#3a3a3a;--mute:#bbb;--red:#c0202c;--gold:#e8b931}
+*{box-sizing:border-box}
+body{margin:0 auto;max-width:560px;padding:20px;background:var(--bg);color:#fff;font:16px/1.45 Arial,Helvetica,sans-serif}
+.tag{font:bold 12px "Courier New",monospace;letter-spacing:2px;color:var(--red)}
+h1{font:bold 30px "Times New Roman",serif;margin:8px 0 2px}
+.sub{color:var(--mute);margin:4px 0 18px}
+button{font:inherit;font-weight:bold;border:0;border-radius:10px;padding:12px 16px;margin:4px 6px 4px 0;background:var(--red);color:#fff}
+button.alt{background:transparent;border:1px solid var(--line)}
+button:disabled{opacity:.5}
+.card{background:var(--card);border-radius:12px;padding:14px;margin:12px 0}
+.role{font:bold 22px "Times New Roman",serif}
+.pill{display:inline-block;font:bold 11px "Courier New",monospace;letter-spacing:1px;border-radius:999px;padding:3px 10px;border:1px solid}
+.p0{color:var(--gold);border-color:var(--gold)}
+.p1{background:var(--gold);color:#000;border-color:var(--gold)}
+.p2,.p3{color:var(--mute);border-color:var(--mute)}
+a{color:var(--gold)}
+small,.mute{color:var(--mute)}
+#log{font:12px/1.4 "Courier New",monospace;color:var(--mute);white-space:pre-wrap;word-break:break-word;border-top:1px solid var(--line);margin-top:24px;padding-top:10px}
+</style>
+</head>
+<body>
+<div class="tag">ROLLING CREDITS / DEVNET DEMO</div>
+<h1>Tap to accept a credit</h1>
+<p class="sub">A contributor connects a wallet and signs. The credit becomes real onchain. Devnet only, unaudited.</p>
+<div id="wallets"></div>
+<div id="who"></div>
+<div id="credits"></div>
+<div id="log"></div>
+<script type="module">
+const PROGRAM = "EEXBANe3p9Y6CRZ1PENKkdxrEBHsGhYi3VoqxPHHFuEk";
+const CHAIN = "solana:devnet";
+const RPC = new URLSearchParams(location.search).get("rpc") || "https://api.devnet.solana.com";
+const NAMES = ["PROPOSED", "VERIFIED", "DECLINED", "REVOKED"];
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, props = {}, ...kids) => { const e = document.createElement(tag); Object.assign(e, props); kids.forEach((k) => e.append(k)); return e; };
+const short = (a) => a.slice(0, 4) + "..." + a.slice(-4);
+const log = (m) => { $("log").textContent += m + "\n"; };
+window.addEventListener("error", (e) => log("Error: " + e.message));
+window.addEventListener("unhandledrejection", (e) => log("Error: " + (e.reason && e.reason.message || e.reason)));
+
+(async function main() {
+  try {
+    const [mwa, std, web3, buf] = await Promise.all([
+      import("https://esm.sh/@solana-mobile/wallet-standard-mobile"),
+      import("https://esm.sh/@wallet-standard/app"),
+      import("https://esm.sh/@solana/web3.js@1"),
+      import("https://esm.sh/buffer@6"),
+    ]);
+    const { Connection, PublicKey, Transaction, TransactionInstruction } = web3;
+    const { Buffer } = buf;
+    const programId = new PublicKey(PROGRAM);
+    const connection = new Connection(RPC, "confirmed");
+    const dir = location.origin + location.pathname.replace(/[^/]*$/, "");
+
+    mwa.registerMwa({ appIdentity: { name: "Rolling Credits", uri: dir, icon: "icon.png" }, chains: [CHAIN] });
+    const registry = std.getWallets();
+    let current = null;
+
+    function renderWallets() {
+      const box = $("wallets");
+      box.replaceChildren();
+      if (current) return;
+      const found = registry.get().filter((w) => w.features["standard:connect"] && Object.keys(w.features).some((f) => f.startsWith("solana:")));
+      if (!found.length) { box.append(el("p", { className: "mute", textContent: "No wallet found. Open this page in Chrome on Android, with Phantom or Solflare installed." })); return; }
+      found.forEach((w) => box.append(el("button", { textContent: "Connect with " + w.name, onclick: () => connect(w) })));
+    }
+    registry.on("register", renderWallets);
+    renderWallets();
+
+    async function connect(w) {
+      try {
+        log("Connecting to " + w.name + "...");
+        const { accounts } = await w.features["standard:connect"].connect();
+        current = { wallet: w, account: accounts[0] };
+        $("wallets").replaceChildren();
+        const addr = current.account.address;
+        $("who").replaceChildren(
+          el("p", {}, "Connected: ", el("b", { textContent: short(addr) })),
+          el("button", { className: "alt", textContent: "Copy my address", onclick: () => navigator.clipboard.writeText(addr).then(() => log("Address copied.")) }),
+          el("button", { className: "alt", textContent: "Refresh", onclick: () => load() })
+        );
+        await load();
+      } catch (e) { log("Connect failed: " + (e.message || e)); }
+    }
+
+    const td = new TextDecoder();
+    function readStr(d, u8, o) { const n = d.getUint32(o, true); return [td.decode(u8.subarray(o + 4, o + 4 + n)), o + 4 + n]; }
+    function view(data) { const u8 = new Uint8Array(data); return [u8, new DataView(u8.buffer, u8.byteOffset, u8.byteLength)]; }
+    function parseCredit(data) {
+      const [u8, d] = view(data);
+      const production = new PublicKey(u8.subarray(8, 40));
+      let [role, o] = readStr(d, u8, 72);
+      return { production, role, status: u8[o] };
+    }
+    function parseProduction(data) {
+      const [u8, d] = view(data);
+      let [slug, o] = readStr(d, u8, 40);
+      let [title] = readStr(d, u8, o);
+      return { slug, title };
+    }
+
+    async function load() {
+      const box = $("credits");
+      box.replaceChildren(el("p", { className: "mute", textContent: "Loading credits..." }));
+      try {
+        const me = new PublicKey(current.account.address);
+        const accs = await connection.getProgramAccounts(programId, { filters: [{ dataSize: 144 }, { memcmp: { offset: 40, bytes: me.toBase58() } }] });
+        box.replaceChildren();
+        if (!accs.length) { box.append(el("p", { className: "mute", textContent: "No credits proposed to this wallet yet." })); return; }
+        for (const a of accs) {
+          const c = parseCredit(a.account.data);
+          let title = "Unknown production";
+          try { const p = await connection.getAccountInfo(c.production); if (p) title = parseProduction(p.data).title; } catch (e) {}
+          const card = el("div", { className: "card" },
+            el("div", { className: "role", textContent: c.role }),
+            el("div", { className: "mute", textContent: title }),
+            el("p", {}, el("span", { className: "pill p" + c.status, textContent: NAMES[c.status] || "UNKNOWN" }))
+          );
+          if (c.status === 0) {
+            card.append(el("button", { textContent: "Accept credit", onclick: (ev) => act(a.pubkey, "accept_credit", ev.target) }));
+            card.append(el("button", { className: "alt", textContent: "Decline", onclick: (ev) => act(a.pubkey, "decline_credit", ev.target) }));
+          } else {
+            card.append(el("a", { href: "https://explorer.solana.com/address/" + a.pubkey.toBase58() + "?cluster=devnet", target: "_blank", rel: "noopener", textContent: "View on explorer" }));
+          }
+          box.append(card);
+        }
+      } catch (e) { box.replaceChildren(); log("Load failed: " + (e.message || e)); }
+    }
+
+    async function disc(name) {
+      const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("global:" + name));
+      return Buffer.from(new Uint8Array(h).slice(0, 8));
+    }
+
+    async function act(creditPk, name, btn) {
+      btn.disabled = true;
+      try {
+        const payer = new PublicKey(current.account.address);
+        const ix = new TransactionInstruction({
+          programId,
+          keys: [{ pubkey: creditPk, isSigner: false, isWritable: true }, { pubkey: payer, isSigner: true, isWritable: false }],
+          data: await disc(name),
+        });
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+        const tx = new Transaction({ feePayer: payer, blockhash, lastValidBlockHeight }).add(ix);
+        const bytes = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
+        const f = current.wallet.features;
+        let sig;
+        log("Asking your wallet to sign...");
+        if (f["solana:signAndSendTransaction"]) {
+          const [{ signature }] = await f["solana:signAndSendTransaction"].signAndSendTransaction({ account: current.account, chain: CHAIN, transaction: bytes });
+          const { default: bs58 } = await import("https://esm.sh/bs58@5");
+          sig = bs58.encode(signature);
+        } else {
+          const [{ signedTransaction }] = await f["solana:signTransaction"].signTransaction({ account: current.account, chain: CHAIN, transaction: bytes });
+          sig = await connection.sendRawTransaction(signedTransaction);
+        }
+        log("Sent. Waiting for the chain...");
+        for (let i = 0; i < 20; i++) {
+          await new Promise((r) => setTimeout(r, 1500));
+          const info = await connection.getAccountInfo(creditPk, "confirmed");
+          if (info && parseCredit(info.data).status !== 0) break;
+        }
+        log("Done: https://explorer.solana.com/tx/" + sig + "?cluster=devnet");
+        await load();
+      } catch (e) { log("Failed: " + (e.message || e)); btn.disabled = false; }
+    }
+  } catch (e) { log("Startup failed: " + (e.message || e)); }
+})();
+</script>
+</body>
+</html>
