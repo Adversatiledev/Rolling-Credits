@@ -28,7 +28,7 @@ small,.mute{color:var(--mute)}
 <body>
 <div class="tag">ROLLING CREDITS / DEVNET DEMO</div>
 <h1>Tap to accept a credit</h1>
-<p class="sub">A contributor connects a wallet and signs. The credit becomes real onchain. Devnet only, unaudited.</p>
+<p class="sub">A contributor connects a wallet and signs. The credit becomes real onchain. Devnet only, unaudited. In real use the producer proposes and the crew member accepts. In this demo one wallet can play both.</p>
 <div id="wallets"></div>
 <div id="who"></div>
 <div id="credits"></div>
@@ -84,6 +84,7 @@ window.addEventListener("unhandledrejection", (e) => log("Error: " + (e.reason &
         const addr = current.account.address;
         $("who").replaceChildren(
           el("p", {}, "Connected: ", el("b", { textContent: short(addr) })),
+          el("button", { textContent: "Create a demo credit for me", onclick: (ev) => demo(ev.target) }),
           el("button", { className: "alt", textContent: "Copy my address", onclick: () => navigator.clipboard.writeText(addr).then(() => log("Address copied.")) }),
           el("button", { className: "alt", textContent: "Refresh", onclick: () => load() })
         );
@@ -114,7 +115,7 @@ window.addEventListener("unhandledrejection", (e) => log("Error: " + (e.reason &
         const me = new PublicKey(current.account.address);
         const accs = await connection.getProgramAccounts(programId, { filters: [{ dataSize: 144 }, { memcmp: { offset: 40, bytes: me.toBase58() } }] });
         box.replaceChildren();
-        if (!accs.length) { box.append(el("p", { className: "mute", textContent: "No credits proposed to this wallet yet." })); return; }
+        if (!accs.length) { box.append(el("p", { className: "mute", textContent: "No credits proposed to this wallet yet. Tap Create a demo credit for me." })); return; }
         for (const a of accs) {
           const c = parseCredit(a.account.data);
           let title = "Unknown production";
@@ -140,6 +141,26 @@ window.addEventListener("unhandledrejection", (e) => log("Error: " + (e.reason &
       return Buffer.from(new Uint8Array(h).slice(0, 8));
     }
 
+    const u32 = (n) => { const b = Buffer.alloc(4); b.writeUInt32LE(n, 0); return b; };
+    const str = (t) => { const b = Buffer.from(new TextEncoder().encode(t)); return Buffer.concat([u32(b.length), b]); };
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    async function send(ixs) {
+      const payer = new PublicKey(current.account.address);
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+      const tx = new Transaction({ feePayer: payer, blockhash, lastValidBlockHeight }).add(...ixs);
+      const bytes = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
+      const f = current.wallet.features;
+      log("Asking your wallet to sign...");
+      if (f["solana:signAndSendTransaction"]) {
+        const [{ signature }] = await f["solana:signAndSendTransaction"].signAndSendTransaction({ account: current.account, chain: CHAIN, transaction: bytes });
+        const { default: bs58 } = await import("https://esm.sh/bs58@5");
+        return bs58.encode(signature);
+      }
+      const [{ signedTransaction }] = await f["solana:signTransaction"].signTransaction({ account: current.account, chain: CHAIN, transaction: bytes });
+      return await connection.sendRawTransaction(signedTransaction);
+    }
+
     async function act(creditPk, name, btn) {
       btn.disabled = true;
       try {
@@ -149,29 +170,56 @@ window.addEventListener("unhandledrejection", (e) => log("Error: " + (e.reason &
           keys: [{ pubkey: creditPk, isSigner: false, isWritable: true }, { pubkey: payer, isSigner: true, isWritable: false }],
           data: await disc(name),
         });
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
-        const tx = new Transaction({ feePayer: payer, blockhash, lastValidBlockHeight }).add(ix);
-        const bytes = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
-        const f = current.wallet.features;
-        let sig;
-        log("Asking your wallet to sign...");
-        if (f["solana:signAndSendTransaction"]) {
-          const [{ signature }] = await f["solana:signAndSendTransaction"].signAndSendTransaction({ account: current.account, chain: CHAIN, transaction: bytes });
-          const { default: bs58 } = await import("https://esm.sh/bs58@5");
-          sig = bs58.encode(signature);
-        } else {
-          const [{ signedTransaction }] = await f["solana:signTransaction"].signTransaction({ account: current.account, chain: CHAIN, transaction: bytes });
-          sig = await connection.sendRawTransaction(signedTransaction);
-        }
+        const sig = await send([ix]);
         log("Sent. Waiting for the chain...");
         for (let i = 0; i < 20; i++) {
-          await new Promise((r) => setTimeout(r, 1500));
+          await sleep(1500);
           const info = await connection.getAccountInfo(creditPk, "confirmed");
           if (info && parseCredit(info.data).status !== 0) break;
         }
         log("Done: https://explorer.solana.com/tx/" + sig + "?cluster=devnet");
         await load();
       } catch (e) { log("Failed: " + (e.message || e)); btn.disabled = false; }
+    }
+
+    async function demo(btn) {
+      btn.disabled = true;
+      try {
+        const me = new PublicKey(current.account.address);
+        const slug = "demo-" + Date.now().toString().slice(-8);
+        const [production] = PublicKey.findProgramAddressSync([Buffer.from("production"), me.toBuffer(), Buffer.from(slug)], programId);
+        const [credit] = PublicKey.findProgramAddressSync([Buffer.from("credit"), production.toBuffer(), me.toBuffer()], programId);
+        const sys = web3.SystemProgram.programId;
+        const ix1 = new TransactionInstruction({
+          programId,
+          keys: [
+            { pubkey: production, isSigner: false, isWritable: true },
+            { pubkey: me, isSigner: true, isWritable: true },
+            { pubkey: sys, isSigner: false, isWritable: false },
+          ],
+          data: Buffer.concat([await disc("create_production"), str(slug), str("Demo: Short Film")]),
+        });
+        const ix2 = new TransactionInstruction({
+          programId,
+          keys: [
+            { pubkey: production, isSigner: false, isWritable: true },
+            { pubkey: credit, isSigner: false, isWritable: true },
+            { pubkey: me, isSigner: false, isWritable: false },
+            { pubkey: me, isSigner: true, isWritable: true },
+            { pubkey: sys, isSigner: false, isWritable: false },
+          ],
+          data: Buffer.concat([await disc("propose_credit"), str("Gaffer")]),
+        });
+        const sig = await send([ix1, ix2]);
+        log("Sent. Waiting for the chain...");
+        for (let i = 0; i < 20; i++) {
+          await sleep(1500);
+          if (await connection.getAccountInfo(credit, "confirmed")) break;
+        }
+        log("Created: https://explorer.solana.com/tx/" + sig + "?cluster=devnet");
+        await load();
+      } catch (e) { log("Failed: " + (e.message || e)); }
+      btn.disabled = false;
     }
   } catch (e) { log("Startup failed: " + (e.message || e)); }
 })();
