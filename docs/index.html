@@ -49,7 +49,7 @@ window.addEventListener("unhandledrejection", (e) => log("Error: " + (e.reason &
 (async function main() {
   try {
     const [mwa, std, web3, buf] = await Promise.all([
-      import("https://esm.sh/@solana-mobile/wallet-standard-mobile"),
+import("https://esm.sh/@solana-mobile/wallet-standard-mobile@latest"),
       import("https://esm.sh/@wallet-standard/app"),
       import("https://esm.sh/@solana/web3.js@1"),
       import("https://esm.sh/buffer@6"),
