@@ -59,6 +59,10 @@ section{margin-top:28px}
 .row2{display:flex;gap:10px;margin-top:14px}
 .row2 .primary{flex:1}
 .link{display:inline-block;margin-top:12px;color:var(--android);text-decoration:none;font-weight:500}
+label{display:block;font-size:13px;color:var(--mute);margin:12px 0 4px}
+input{width:100%;height:48px;border-radius:14px;border:1px solid var(--line);background:var(--void);color:var(--ink);font:400 15px var(--ui);padding:0 14px}
+.sentrow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.sentrow:first-of-type{border-top:0}
 .empty{text-align:center}
 .empty p{color:var(--mute);margin:8px 0 14px}
 .skel{height:150px;border-radius:22px;background:linear-gradient(90deg,var(--surface),var(--surface2),var(--surface));background-size:200% 100%;animation:sh 1.2s infinite;margin-bottom:12px}
@@ -126,6 +130,12 @@ pre{white-space:pre-wrap;word-break:break-word;margin-top:8px}
 
   <section id="creditsWrap">
     <div id="credits"></div>
+  </section>
+
+  <section id="giveWrap" hidden>
+    <div class="head"><h2>Give a credit</h2></div>
+    <div id="give"></div>
+    <div id="sent"></div>
   </section>
 
   <section>
@@ -307,6 +317,8 @@ $("sheet").addEventListener("click", (e) => { if (e.target.id === "sheet") sheet
           el("button", { textContent: "\u21BB", title: "Refresh", "aria-label": "Refresh", onclick: () => load() })));
         steps(1);
         orb(0.4, "Gathering.");
+        renderGive();
+        $("giveWrap").hidden = false;
         await load();
       } catch (e) { log("Connect failed: " + (e.message || e)); toast(friendly(e)); }
     }
@@ -405,30 +417,105 @@ $("sheet").addEventListener("click", (e) => { if (e.target.id === "sheet") sheet
       } catch (e) { log("Failed: " + (e.message || e)); sheet.fail(friendly(e)); btn.disabled = false; }
     }
 
+    async function propose(to, role, title) {
+      const me = new PublicKey(current.account.address);
+      const slug = "credit-" + Date.now().toString().slice(-8);
+      const [production] = PublicKey.findProgramAddressSync([Buffer.from("production"), me.toBuffer(), Buffer.from(slug)], programId);
+      const [credit] = PublicKey.findProgramAddressSync([Buffer.from("credit"), production.toBuffer(), to.toBuffer()], programId);
+      const sys = web3.SystemProgram.programId;
+      const ix1 = new TransactionInstruction({ programId, keys: [
+        { pubkey: production, isSigner: false, isWritable: true }, { pubkey: me, isSigner: true, isWritable: true }, { pubkey: sys, isSigner: false, isWritable: false }],
+        data: Buffer.concat([await disc("create_production"), str(slug), str(title)]) });
+      const ix2 = new TransactionInstruction({ programId, keys: [
+        { pubkey: production, isSigner: false, isWritable: true }, { pubkey: credit, isSigner: false, isWritable: true }, { pubkey: to, isSigner: false, isWritable: false },
+        { pubkey: me, isSigner: true, isWritable: true }, { pubkey: sys, isSigner: false, isWritable: false }],
+        data: Buffer.concat([await disc("propose_credit"), str(role)]) });
+      const sig = await send([ix1, ix2]);
+      sheet.text("Confirming onchain\u2026");
+      await waitFor(credit, (info) => !!info);
+      log("Proposed: " + sig);
+      return { sig, credit };
+    }
+
     async function demo(btn) {
       btn.disabled = true;
       sheet.open("Creating a demo credit", "Preparing\u2026");
       try {
-        const me = new PublicKey(current.account.address);
-        const slug = "demo-" + Date.now().toString().slice(-8);
-        const [production] = PublicKey.findProgramAddressSync([Buffer.from("production"), me.toBuffer(), Buffer.from(slug)], programId);
-        const [credit] = PublicKey.findProgramAddressSync([Buffer.from("credit"), production.toBuffer(), me.toBuffer()], programId);
-        const sys = web3.SystemProgram.programId;
-        const ix1 = new TransactionInstruction({ programId, keys: [
-          { pubkey: production, isSigner: false, isWritable: true }, { pubkey: me, isSigner: true, isWritable: true }, { pubkey: sys, isSigner: false, isWritable: false }],
-          data: Buffer.concat([await disc("create_production"), str(slug), str("Demo: Short Film")]) });
-        const ix2 = new TransactionInstruction({ programId, keys: [
-          { pubkey: production, isSigner: false, isWritable: true }, { pubkey: credit, isSigner: false, isWritable: true }, { pubkey: me, isSigner: false, isWritable: false },
-          { pubkey: me, isSigner: true, isWritable: true }, { pubkey: sys, isSigner: false, isWritable: false }],
-          data: Buffer.concat([await disc("propose_credit"), str("Gaffer")]) });
-        const sig = await send([ix1, ix2]);
-        sheet.text("Confirming onchain\u2026");
-        await waitFor(credit, (info) => !!info);
-        log("Created: " + sig);
+        const { sig } = await propose(new PublicKey(current.account.address), "Gaffer", "Demo: Short Film");
         sheet.ok("Demo credit created", "Your Gaffer credit is waiting for you to accept it.", "https://explorer.solana.com/tx/" + sig + "?cluster=devnet");
         await load();
       } catch (e) { log("Failed: " + (e.message || e)); sheet.fail(friendly(e)); }
       btn.disabled = false;
+    }
+
+    const sent = [];
+    let watcher = null;
+
+    function renderGive() {
+      const to = el("input", { id: "giveTo", placeholder: "Paste their wallet address", autocomplete: "off", spellcheck: false });
+      const role = el("input", { id: "giveRole", value: "Early Champion", maxLength: 48 });
+      const title = el("input", { id: "giveTitle", value: "Rolling Credits: Hacker House London 2026", maxLength: 64 });
+      const btn = el("button", { className: "primary", textContent: "Propose credit", style: "margin-top:16px" });
+      btn.onclick = () => give(to.value.trim(), role.value.trim(), title.value.trim(), btn);
+      $("give").replaceChildren(el("div", { className: "card" },
+        el("p", { className: "muted", textContent: "You're the producer. They accept it with their own wallet, or decline it. Nothing is final until they sign." }),
+        el("label", { htmlFor: "giveTo", textContent: "Their wallet address" }), to,
+        el("label", { htmlFor: "giveRole", textContent: "Role" }), role,
+        el("label", { htmlFor: "giveTitle", textContent: "Production" }), title, btn));
+    }
+
+    async function give(toStr, role, title, btn) {
+      let to;
+      try { to = new PublicKey(toStr); } catch (e) { toast("That isn't a Solana wallet address. Ask them to copy it from the app."); return; }
+      const enc = new TextEncoder();
+      if (!role || enc.encode(role).length > 48) { toast("Keep the role between 1 and 48 characters."); return; }
+      if (!title || enc.encode(title).length > 64) { toast("Keep the production title between 1 and 64 characters."); return; }
+      btn.disabled = true;
+      sheet.open("Proposing the credit", "Preparing\u2026");
+      try {
+        const { sig, credit } = await propose(to, role, title);
+        sent.unshift({ pda: credit, to: to.toBase58(), role, status: 0 });
+        sheet.ok("Credit proposed", "It's waiting for " + short(to.toBase58()) + " to accept.", "https://explorer.solana.com/tx/" + sig + "?cluster=devnet");
+        $("giveTo").value = "";
+        renderSent();
+        watch();
+        if (to.toBase58() === current.account.address) await load();
+      } catch (e) { log("Failed: " + (e.message || e)); sheet.fail(friendly(e)); }
+      btn.disabled = false;
+    }
+
+    function renderSent() {
+      if (!sent.length) { $("sent").replaceChildren(); return; }
+      const card = el("div", { className: "card" }, el("div", { className: "kind", textContent: "Proposed by you" }));
+      sent.forEach((x) => {
+        const s = STATUS[x.status] || STATUS[0];
+        card.append(el("div", { className: "sentrow" },
+          el("div", {}, el("div", { textContent: x.role }), el("div", { className: "small", textContent: "to " + short(x.to) })),
+          el("span", { className: "pill " + s.cls, textContent: s.name })));
+      });
+      $("sent").replaceChildren(card);
+    }
+
+    function watch() {
+      if (watcher) return;
+      const started = Date.now();
+      watcher = setInterval(async () => {
+        const open = sent.filter((x) => x.status === 0);
+        if (!open.length || Date.now() - started > 15 * 60 * 1000) { clearInterval(watcher); watcher = null; return; }
+        try {
+          const infos = await connection.getMultipleAccountsInfo(open.map((x) => x.pda));
+          infos.forEach((info, k) => {
+            if (!info) return;
+            const st = parseCredit(info.data).status;
+            if (st !== open[k].status) {
+              open[k].status = st;
+              if (st === 1) { toast(open[k].role + " credit accepted by " + short(open[k].to)); orb(1, "Accepted. The credit is real."); if (navigator.vibrate) navigator.vibrate([40, 60, 40]); }
+              if (st === 2) toast(open[k].role + " credit declined. That's their call.");
+            }
+          });
+          renderSent();
+        } catch (e) { log("Watch: " + (e.message || e)); }
+      }, 8000);
     }
   } catch (e) { log("Startup failed: " + (e.message || e)); toast("Couldn't start. Check your connection and reload."); }
 })();
