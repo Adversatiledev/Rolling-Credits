@@ -2,54 +2,263 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Rolling Credits: tap to accept (devnet demo)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Rolling Credits</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300..800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#000;--card:#151515;--line:#3a3a3a;--mute:#bbb;--red:#c0202c;--gold:#e8b931}
-*{box-sizing:border-box}
-body{margin:0 auto;max-width:560px;padding:20px;background:var(--bg);color:#fff;font:16px/1.45 Arial,Helvetica,sans-serif}
-.tag{font:bold 12px "Courier New",monospace;letter-spacing:2px;color:var(--red)}
-h1{font:bold 30px "Times New Roman",serif;margin:8px 0 2px}
-.sub{color:var(--mute);margin:4px 0 18px}
-button{font:inherit;font-weight:bold;border:0;border-radius:10px;padding:12px 16px;margin:4px 6px 4px 0;background:var(--red);color:#fff}
-button.alt{background:transparent;border:1px solid var(--line)}
-button:disabled{opacity:.5}
-.card{background:var(--card);border-radius:12px;padding:14px;margin:12px 0}
-.role{font:bold 22px "Times New Roman",serif}
-.pill{display:inline-block;font:bold 11px "Courier New",monospace;letter-spacing:1px;border-radius:999px;padding:3px 10px;border:1px solid}
-.p0{color:var(--gold);border-color:var(--gold)}
-.p1{background:var(--gold);color:#000;border-color:var(--gold)}
-.p2,.p3{color:var(--mute);border-color:var(--mute)}
-a{color:var(--gold)}
-small,.mute{color:var(--mute)}
-#log{font:12px/1.4 "Courier New",monospace;color:var(--mute);white-space:pre-wrap;word-break:break-word;border-top:1px solid var(--line);margin-top:24px;padding-top:10px}
+:root{--void:#000;--surface:#1d1b20;--surface2:#2b2930;--line:#3a3740;--ink:#e6e1e5;--mute:#a8a3ad;--faint:#79747e;--play:#01875f;--android:#3ddc84;--red:#c0202c;--gold:#e8b931;--iri1:#ff7ac6;--iri3:#4fd8ff;--ui:"Roboto Flex",Roboto,"Segoe UI",system-ui,sans-serif;--magic:"Instrument Serif","Times New Roman",Georgia,serif}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--void);color:var(--ink);font:400 16px/1.5 var(--ui);padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+:focus-visible{outline:2px solid var(--iri3);outline-offset:3px;border-radius:8px}
+.app{max-width:560px;margin:0 auto;padding:0 18px 40px}
+.appbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0}
+.brand{display:flex;align-items:center;gap:10px;font:500 17px var(--ui)}
+.brand img{width:32px;height:32px;border-radius:9px}
+.chip{display:flex;align-items:center;gap:8px;background:var(--surface2);border-radius:20px;height:36px;padding:0 6px 0 12px;font:500 13px var(--ui)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--android)}
+.chip button{background:none;border:0;color:var(--mute);width:30px;height:30px;border-radius:15px;font-size:15px;cursor:pointer}
+.stage{position:relative;height:250px;margin:0 -18px}
+#orb{width:100%;height:100%;display:block}
+.hint{position:absolute;left:0;right:0;bottom:6px;text-align:center;font:italic 400 17px var(--magic);color:var(--mute)}
+.listing{display:flex;gap:16px;align-items:center;margin-top:8px}
+.listing img{width:68px;height:68px;border-radius:17px;box-shadow:0 6px 24px rgba(155,123,255,.25)}
+h1{font:500 24px/1.2 var(--ui)}
+.dev{color:var(--android);font-weight:500;font-size:15px}
+.small{color:var(--mute);font-size:13px}
+.stats{display:flex;margin:18px 0 16px}
+.stat{flex:1;text-align:center;border-left:1px solid var(--line);padding:0 8px}
+.stat:first-child{border-left:0}
+.stat b{display:block;font:600 15px var(--ui)}
+.stat span{font-size:12px;color:var(--mute)}
+button,.btn{font:500 15px var(--ui);border:0;border-radius:22px;min-height:46px;padding:0 22px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+.primary{background:var(--play);color:#fff;width:100%}
+.ghost{background:none;color:var(--android);border:1px solid var(--line)}
+button:disabled{opacity:.45}
+.progress{display:flex;gap:8px;margin:18px 0 6px}
+.progress span{flex:1;font:500 12px var(--ui);color:var(--faint);padding-top:8px;border-top:3px solid var(--line)}
+.progress span.on{color:var(--ink);border-color:var(--iri3)}
+.progress span.done{color:var(--android);border-color:var(--android)}
+.note{font-size:13px;color:var(--mute);margin-top:10px}
+section{margin-top:28px}
+.head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.head h2{font:500 20px var(--ui)}
+.card{background:var(--surface);border-radius:22px;padding:18px;margin-bottom:12px;animation:rise .35s ease both}
+.card.verified{box-shadow:0 0 0 1px rgba(61,220,132,.45),0 0 36px rgba(155,123,255,.25)}
+.kind{font-size:13px;color:var(--mute)}
+.role{font:400 36px/1.05 var(--magic);margin:4px 0 2px}
+.prod{color:var(--mute);margin-bottom:12px}
+.pill{display:inline-block;font:600 11px/1 var(--ui);border-radius:999px;padding:5px 10px;border:1px solid currentColor}
+.p0{color:var(--gold)}
+.p1{color:#000;background:var(--android);border-color:var(--android)}
+.p2,.p3{color:var(--faint)}
+.row2{display:flex;gap:10px;margin-top:14px}
+.row2 .primary{flex:1}
+.link{display:inline-block;margin-top:12px;color:var(--android);text-decoration:none;font-weight:500}
+.empty{text-align:center}
+.empty p{color:var(--mute);margin:8px 0 14px}
+.skel{height:150px;border-radius:22px;background:linear-gradient(90deg,var(--surface),var(--surface2),var(--surface));background-size:200% 100%;animation:sh 1.2s infinite;margin-bottom:12px}
+.magic{font:400 28px/1.15 var(--magic);margin-bottom:10px}
+.magic i{font-style:italic}
+.muted{color:var(--mute)}
+.safety{border:1px solid var(--line);border-radius:22px;padding:4px 18px}
+.srow{display:flex;gap:14px;padding:13px 0;border-top:1px solid var(--line)}
+.srow:first-child{border-top:0}
+.srow svg{flex:none;margin-top:2px}
+.srow b{font-weight:500}
+.sheet{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);display:flex;align-items:flex-end}
+.sheet.hidden{display:none}
+.panel{width:100%;max-width:560px;margin:0 auto;background:var(--surface);border-radius:28px 28px 0 0;padding:14px 22px calc(24px + env(safe-area-inset-bottom));text-align:center;animation:up .25s ease}
+.grab{width:32px;height:4px;border-radius:2px;background:var(--faint);margin:0 auto 18px}
+.panel h3{font:400 28px var(--magic);margin:12px 0 4px}
+.panel p{color:var(--mute);margin-bottom:12px}
+.spin{width:44px;height:44px;border-radius:50%;border:4px solid var(--line);border-top-color:var(--iri3);margin:0 auto;animation:rot .9s linear infinite}
+.tick{width:56px;height:56px;border-radius:50%;background:var(--android);color:#000;font-size:30px;line-height:56px;margin:0 auto;animation:pop .4s ease}
+.bang{width:56px;height:56px;border-radius:50%;border:2px solid var(--faint);color:var(--mute);font-size:26px;line-height:52px;margin:0 auto}
+.panel .primary,.panel .ghost{width:100%;margin-top:8px}
+#toasts{position:fixed;left:0;right:0;bottom:calc(16px + env(safe-area-inset-bottom));z-index:60;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
+.toast{background:#e6e1e5;color:#1d1b20;border-radius:12px;padding:12px 16px;max-width:92%;font-size:14px;animation:rise .25s ease}
+footer{margin-top:34px;text-align:center;font-size:13px;color:var(--faint)}
+footer a{color:var(--mute);margin:0 8px}
+footer .sig{font:italic 400 19px var(--magic);color:var(--red);margin:14px 0 4px}
+details{margin-top:18px;font:12px/1.4 ui-monospace,Menlo,monospace;color:var(--faint)}
+pre{white-space:pre-wrap;word-break:break-word;margin-top:8px}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes up{from{transform:translateY(40px)}to{transform:none}}
+@keyframes sh{to{background-position:-200% 0}}
+@keyframes rot{to{transform:rotate(360deg)}}
+@keyframes pop{0%{transform:scale(.4)}70%{transform:scale(1.15)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
 </style>
 </head>
 <body>
-<div class="tag">ROLLING CREDITS / DEVNET DEMO</div>
-<h1>Tap to accept a credit</h1>
-<p class="sub">A contributor connects a wallet and signs. The credit becomes real onchain. Devnet only, unaudited. In real use the producer proposes and the crew member accepts. In this demo one wallet can play both.</p>
-<div id="wallets"></div>
-<div id="who"></div>
-<div id="credits"></div>
-<div id="log"></div>
+<main class="app">
+  <header class="appbar">
+    <div class="brand"><img src="icon-192.png" alt="" onerror="this.style.display='none'">Rolling Credits</div>
+    <div id="chip"></div>
+  </header>
+
+  <div class="stage">
+    <canvas id="orb" aria-hidden="true"></canvas>
+    <div class="hint" id="hint">Your work, still a cloud.</div>
+  </div>
+
+  <div class="listing">
+    <img src="icon-192.png" alt="" onerror="this.style.visibility='hidden'">
+    <div>
+      <h1>Rolling Credits</h1>
+      <div class="dev">Adversatile Artists</div>
+      <div class="small">Devnet preview</div>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat"><b>Devnet</b><span>test network</span></div>
+    <div class="stat"><b>Free</b><span>no real money</span></div>
+    <div class="stat"><b>Open</b><span>source code</span></div>
+  </div>
+
+  <div id="wallets"></div>
+  <div class="progress" id="progress"></div>
+
+  <section id="creditsWrap">
+    <div id="credits"></div>
+  </section>
+
+  <section>
+    <div class="head"><h2>About this app</h2></div>
+    <p class="magic">Credit where it's due, <i>signed by you.</i></p>
+    <p class="muted">On a production, a producer proposes your credit. You accept it with your own phone, and it's recorded onchain where nobody can quietly erase it. In this demo, one wallet plays both producer and crew.</p>
+  </section>
+
+  <section>
+    <div class="head"><h2>Honest status</h2></div>
+    <div class="safety">
+      <div class="srow"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e8b931" stroke-width="2"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg><div><b>Runs on devnet only.</b><div class="small">Solana's test network. Credits have no money value.</div></div></div>
+      <div class="srow"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e8b931" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16v1"/></svg><div><b>Unaudited.</b><div class="small">A review and an audit come before mainnet.</div></div></div>
+      <div class="srow"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3ddc84" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg><div><b>Your keys stay in your wallet.</b><div class="small">This app never sees a private key or recovery phrase.</div></div></div>
+    </div>
+  </section>
+
+  <footer>
+    <a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="https://github.com/Adversatiledev/Rolling-Credits">Open source</a>
+    <div class="sig">Constraints are the brief.</div>
+    Adversatile Artists, London
+  </footer>
+  <details><summary>Technical log</summary><pre id="log"></pre></details>
+</main>
+<div id="sheet" class="sheet hidden"><div class="panel" id="panel"></div></div>
+<div id="toasts" aria-live="polite"></div>
+
+<script>
+/* the orb: a cloud that sets as your credit becomes real */
+(function () {
+  var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var cv = document.getElementById("orb"), ctx = cv.getContext("2d");
+  var W, H, R, cx, cy, N = 240, pts = [], p = 0, goal = 0.08, settled = 0, running = true;
+  function size() { var d = Math.min(2, window.devicePixelRatio || 1); W = cv.clientWidth; H = cv.clientHeight; cv.width = W * d; cv.height = H * d; ctx.setTransform(d, 0, 0, d, 0, 0); R = Math.min(W, H) * 0.32; cx = W / 2; cy = H / 2 - 10; }
+  for (var i = 0; i < N; i++) {
+    var y = 1 - 2 * (i + 0.5) / N, r = Math.sqrt(1 - y * y), th = i * 2.39996;
+    pts.push({ tx: Math.cos(th) * r, ty: y, tz: Math.sin(th) * r, cx: (Math.random() - 0.5) * 3.2, cy: (Math.random() - 0.5) * 1.4, cz: (Math.random() - 0.5) * 2, hue: 285 + Math.random() * 90, s: 1 + Math.random() * 2.2, ph: Math.random() * 6.28 });
+  }
+  function draw(now) {
+    var prev = p;
+    p = reduce ? goal : p + (goal - p) * 0.035;
+    if (Math.abs(goal - p) < 0.002) p = goal;
+    if (goal === 1 && p > 0.995 && prev <= 0.995) settled = now;
+    var squish = settled && !reduce ? Math.exp(-(now - settled) / 500) * Math.sin((now - settled) / 70) * 0.09 : 0;
+    var a = reduce ? 0.6 : now * 0.00022;
+    ctx.clearRect(0, 0, W, H);
+    var body = Math.max(0, (p - 0.6) / 0.4);
+    if (body > 0) {
+      var hs = reduce ? 0 : Math.sin(now / 1800) * 18;
+      var g = ctx.createRadialGradient(cx - R * 0.35, cy - R * 0.4, R * 0.05, cx, cy, R * 1.05);
+      g.addColorStop(0, "rgba(255,255,255," + 0.85 * body + ")");
+      g.addColorStop(0.25, "hsla(" + (318 + hs) + ",95%,72%," + body + ")");
+      g.addColorStop(0.6, "hsla(" + (262 + hs) + ",80%,52%," + body + ")");
+      g.addColorStop(0.92, "hsla(" + (196 + hs) + ",90%,42%," + body + ")");
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.save(); ctx.translate(cx, cy); ctx.scale(1 + squish, 1 - squish); ctx.translate(-cx, -cy);
+      ctx.shadowColor = "rgba(155,123,255," + 0.6 * body + ")"; ctx.shadowBlur = 40;
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    }
+    ctx.globalCompositeOperation = "lighter";
+    for (var i = 0; i < pts.length; i++) {
+      var q = pts[i], drift = reduce ? 0 : (1 - p) * 0.12;
+      var qx = q.cx + Math.sin(now / 1500 + q.ph) * drift, qy = q.cy + Math.cos(now / 1700 + q.ph) * drift;
+      var x = qx + (q.tx - qx) * p, y = qy + (q.ty * (1 - squish) - qy) * p, z = q.cz + (q.tz - q.cz) * p;
+      var rx = x * Math.cos(a) + z * Math.sin(a), rz = -x * Math.sin(a) + z * Math.cos(a), d = (rz + 1.2) / 2.4;
+      var rad = (1 - p) * 13 * q.s + p * (1 + 1.8 * d), al = (1 - p) * 0.09 + p * (0.15 + 0.55 * d) * (1 - body * 0.5);
+      ctx.fillStyle = "hsla(" + q.hue + ",95%,72%," + al + ")";
+      ctx.beginPath(); ctx.arc(cx + rx * R, cy + y * R, rad, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalCompositeOperation = "source-over";
+    if (running && !reduce) requestAnimationFrame(draw);
+  }
+  size(); window.addEventListener("resize", function () { size(); if (reduce) draw(performance.now()); });
+  if ("IntersectionObserver" in window) new IntersectionObserver(function (es) { es.forEach(function (e) { var was = running; running = e.isIntersecting; if (running && !was && !reduce) requestAnimationFrame(draw); }); }).observe(cv);
+  requestAnimationFrame(draw);
+  window.orb = function (g, text) { if (g === 1 && goal !== 1) settled = 0; goal = g; if (text) document.getElementById("hint").textContent = text; if (reduce) draw(performance.now()); };
+})();
+</script>
+
 <script type="module">
 const PROGRAM = "EEXBANe3p9Y6CRZ1PENKkdxrEBHsGhYi3VoqxPHHFuEk";
 const CHAIN = "solana:devnet";
-const RPC = new URLSearchParams(location.search).get("rpc") || "https://api.devnet.solana.com";
-const NAMES = ["PROPOSED", "VERIFIED", "DECLINED", "REVOKED"];
+const qs = new URLSearchParams(location.search);
+const KEY = qs.get("key");
+const RPC = qs.get("rpc") || (KEY ? "https://devnet.helius-rpc.com/?api-key=" + KEY : "https://api.devnet.solana.com");
+const STATUS = [
+  { name: "Proposed", cls: "p0", hint: "Waiting for you to accept" },
+  { name: "Verified", cls: "p1", hint: "Signed by you and recorded onchain" },
+  { name: "Declined", cls: "p2", hint: "You declined this credit" },
+  { name: "Revoked", cls: "p3", hint: "Removed by agreement" },
+];
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...kids) => { const e = document.createElement(tag); Object.assign(e, props); kids.forEach((k) => e.append(k)); return e; };
-const short = (a) => a.slice(0, 4) + "..." + a.slice(-4);
-const log = (m) => { $("log").textContent += m + "\n"; };
+const short = (a) => a.slice(0, 4) + "\u2026" + a.slice(-4);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const log = (m) => { $("log").textContent += new Date().toLocaleTimeString() + "  " + m + "\n"; };
 window.addEventListener("error", (e) => log("Error: " + e.message));
 window.addEventListener("unhandledrejection", (e) => log("Error: " + (e.reason && e.reason.message || e.reason)));
+
+function toast(msg) { const t = el("div", { className: "toast", textContent: msg }); $("toasts").append(t); setTimeout(() => t.remove(), 5000); }
+function friendly(e) {
+  const m = (e && e.message) || String(e);
+  if (/reject|declin|denied|cancel/i.test(m)) return "Nothing was signed. You can try again any time.";
+  if (/429|rate limit/i.test(m)) return "The network is busy. Wait a few seconds and try again.";
+  if (/websocket|transport|session/i.test(m)) return "Couldn't reach your wallet. Open your wallet app, then try again.";
+  if (/debit|no record of a prior credit|insufficient/i.test(m)) return "This wallet needs a little devnet SOL for fees.";
+  return "Something went wrong. The details are in the technical log.";
+}
+function steps(n) {
+  const labels = ["Connect", "Credit", "Accept"];
+  $("progress").replaceChildren(...labels.map((t, i) => el("span", { className: i < n ? "done" : i === n ? "on" : "", textContent: t })));
+}
+steps(0);
+
+const sheet = {
+  open(title, text) { $("panel").replaceChildren(el("div", { className: "grab" }), el("div", { className: "spin" }), el("h3", { textContent: title }), el("p", { textContent: text })); $("sheet").classList.remove("hidden"); },
+  text(text) { const p = $("panel").querySelector("p"); if (p) p.textContent = text; },
+  ok(title, text, href) {
+    $("panel").replaceChildren(el("div", { className: "grab" }), el("div", { className: "tick", textContent: "\u2713" }), el("h3", { textContent: title }), el("p", { textContent: text }),
+      ...(href ? [el("a", { className: "btn ghost", href, target: "_blank", rel: "noopener", textContent: "View on explorer" })] : []),
+      el("button", { className: "primary", textContent: "Done", onclick: () => sheet.close() }));
+    if (navigator.vibrate) navigator.vibrate(40);
+  },
+  fail(text) { $("panel").replaceChildren(el("div", { className: "grab" }), el("div", { className: "bang", textContent: "!" }), el("h3", { textContent: "Not this time" }), el("p", { textContent: text }), el("button", { className: "ghost", textContent: "Close", onclick: () => sheet.close() })); },
+  close() { $("sheet").classList.add("hidden"); },
+};
+$("sheet").addEventListener("click", (e) => { if (e.target.id === "sheet") sheet.close(); });
 
 (async function main() {
   try {
     const [mwa, std, web3, buf] = await Promise.all([
-import("https://esm.sh/@solana-mobile/wallet-standard-mobile@latest"),
+      import("https://esm.sh/@solana-mobile/wallet-standard-mobile@latest"),
       import("https://esm.sh/@wallet-standard/app"),
       import("https://esm.sh/@solana/web3.js@1"),
       import("https://esm.sh/buffer@6"),
@@ -57,171 +266,171 @@ import("https://esm.sh/@solana-mobile/wallet-standard-mobile@latest"),
     const { Connection, PublicKey, Transaction, TransactionInstruction } = web3;
     const { Buffer } = buf;
     const programId = new PublicKey(PROGRAM);
-    const connection = new Connection(RPC, "confirmed");
+    const connection = new Connection(RPC, { commitment: "confirmed", disableRetryOnRateLimit: true });
     const dir = location.origin + location.pathname.replace(/[^/]*$/, "");
-
-    mwa.registerMwa({ appIdentity: { name: "Rolling Credits", uri: dir, icon: "icon.png" }, chains: [CHAIN] });
+    mwa.registerMwa({ appIdentity: { name: "Rolling Credits", uri: dir, icon: "icon-192.png" }, chains: [CHAIN] });
     const registry = std.getWallets();
     let current = null;
+
+    async function rpc(fn) {
+      for (let i = 0; ; i++) {
+        try { return await fn(); }
+        catch (e) {
+          const m = (e && e.message) || "";
+          if (i < 5 && /429|rate limit|Failed to fetch|fetch failed/i.test(m)) { log("Network busy, retry " + (i + 1)); sheet.text("The network is busy. Retrying (" + (i + 1) + " of 5)\u2026"); await sleep(900 * (i + 1)); continue; }
+          throw e;
+        }
+      }
+    }
 
     function renderWallets() {
       const box = $("wallets");
       box.replaceChildren();
       if (current) return;
       const found = registry.get().filter((w) => w.features["standard:connect"] && Object.keys(w.features).some((f) => f.startsWith("solana:")));
-      if (!found.length) { box.append(el("p", { className: "mute", textContent: "No wallet found. Open this page in Chrome on Android, with Phantom or Solflare installed." })); return; }
-      found.forEach((w) => box.append(el("button", { textContent: "Connect with " + w.name, onclick: () => connect(w) })));
+      if (!found.length) { box.append(el("p", { className: "note", textContent: "No wallet found. Open this app on an Android phone with Phantom, Solflare or Seed Vault installed." })); return; }
+      found.forEach((w) => box.append(el("button", { className: "primary", textContent: found.length > 1 ? "Connect " + w.name : "Connect wallet", onclick: () => connect(w) })));
+      box.append(el("p", { className: "note", textContent: "Set your wallet to Devnet first." }));
     }
     registry.on("register", renderWallets);
     renderWallets();
 
     async function connect(w) {
       try {
-        log("Connecting to " + w.name + "...");
+        log("Connecting to " + w.name);
         const { accounts } = await w.features["standard:connect"].connect();
         current = { wallet: w, account: accounts[0] };
-        $("wallets").replaceChildren();
         const addr = current.account.address;
-        $("who").replaceChildren(
-          el("p", {}, "Connected: ", el("b", { textContent: short(addr) })),
-          el("button", { textContent: "Create a demo credit for me", onclick: (ev) => demo(ev.target) }),
-          el("button", { className: "alt", textContent: "Copy my address", onclick: () => navigator.clipboard.writeText(addr).then(() => log("Address copied.")) }),
-          el("button", { className: "alt", textContent: "Refresh", onclick: () => load() })
-        );
+        $("wallets").replaceChildren();
+        $("chip").replaceChildren(el("div", { className: "chip" }, el("span", { className: "dot" }), el("span", { textContent: short(addr) }),
+          el("button", { textContent: "\u29C9", title: "Copy address", "aria-label": "Copy address", onclick: () => navigator.clipboard.writeText(addr).then(() => toast("Address copied")) }),
+          el("button", { textContent: "\u21BB", title: "Refresh", "aria-label": "Refresh", onclick: () => load() })));
+        steps(1);
+        orb(0.4, "Gathering.");
         await load();
-      } catch (e) { log("Connect failed: " + (e.message || e)); }
+      } catch (e) { log("Connect failed: " + (e.message || e)); toast(friendly(e)); }
     }
 
     const td = new TextDecoder();
     function readStr(d, u8, o) { const n = d.getUint32(o, true); return [td.decode(u8.subarray(o + 4, o + 4 + n)), o + 4 + n]; }
     function view(data) { const u8 = new Uint8Array(data); return [u8, new DataView(u8.buffer, u8.byteOffset, u8.byteLength)]; }
-    function parseCredit(data) {
-      const [u8, d] = view(data);
-      const production = new PublicKey(u8.subarray(8, 40));
-      let [role, o] = readStr(d, u8, 72);
-      return { production, role, status: u8[o] };
-    }
-    function parseProduction(data) {
-      const [u8, d] = view(data);
-      let [slug, o] = readStr(d, u8, 40);
-      let [title] = readStr(d, u8, o);
-      return { slug, title };
-    }
+    function parseCredit(data) { const [u8, d] = view(data); const production = new PublicKey(u8.subarray(8, 40)); let [role, o] = readStr(d, u8, 72); return { production, role, status: u8[o] }; }
+    function parseProduction(data) { const [u8, d] = view(data); let [slug, o] = readStr(d, u8, 40); let [title] = readStr(d, u8, o); return { slug, title }; }
 
     async function load() {
       const box = $("credits");
-      box.replaceChildren(el("p", { className: "mute", textContent: "Loading credits..." }));
+      box.replaceChildren(el("div", { className: "skel" }));
       try {
         const me = new PublicKey(current.account.address);
-        const accs = await connection.getProgramAccounts(programId, { filters: [{ dataSize: 144 }, { memcmp: { offset: 40, bytes: me.toBase58() } }] });
+        const accs = await rpc(() => connection.getProgramAccounts(programId, { filters: [{ dataSize: 144 }, { memcmp: { offset: 40, bytes: me.toBase58() } }] }));
         box.replaceChildren();
-        if (!accs.length) { box.append(el("p", { className: "mute", textContent: "No credits proposed to this wallet yet. Tap Create a demo credit for me." })); return; }
-        for (const a of accs) {
-          const c = parseCredit(a.account.data);
-          let title = "Unknown production";
-          try { const p = await connection.getAccountInfo(c.production); if (p) title = parseProduction(p.data).title; } catch (e) {}
-          const card = el("div", { className: "card" },
+        if (!accs.length) {
+          steps(1);
+          box.append(el("div", { className: "card empty" },
+            el("div", { className: "role", textContent: "No credits yet" }),
+            el("p", { textContent: "In real use a producer proposes your credit and you accept it. Here you can play both." }),
+            el("button", { className: "primary", textContent: "Create a demo credit", onclick: (ev) => demo(ev.target) })));
+          return;
+        }
+        const parsed = accs.map((a) => ({ pk: a.pubkey, c: parseCredit(a.account.data) }));
+        const prodKeys = [...new Map(parsed.map((x) => [x.c.production.toBase58(), x.c.production])).values()];
+        const infos = await rpc(() => connection.getMultipleAccountsInfo(prodKeys));
+        const titles = {};
+        prodKeys.forEach((k, i) => { try { titles[k.toBase58()] = infos[i] ? parseProduction(infos[i].data).title : "Unknown production"; } catch (e) { titles[k.toBase58()] = "Unknown production"; } });
+        const anyProposed = parsed.some((x) => x.c.status === 0), anyVerified = parsed.some((x) => x.c.status === 1);
+        steps(anyProposed ? 2 : 3);
+        if (anyVerified) orb(1, "Solid. Your credit is real."); else orb(0.7, "Almost solid. One tap left.");
+        parsed.sort((a, b) => (a.c.status === 0 ? -1 : 0) - (b.c.status === 0 ? -1 : 0));
+        for (const { pk, c } of parsed) {
+          const s = STATUS[c.status] || { name: "Unknown", cls: "p3", hint: "" };
+          const card = el("div", { className: "card" + (c.status === 1 ? " verified" : "") },
+            el("div", { className: "kind", textContent: titles[c.production.toBase58()] }),
             el("div", { className: "role", textContent: c.role }),
-            el("div", { className: "mute", textContent: title }),
-            el("p", {}, el("span", { className: "pill p" + c.status, textContent: NAMES[c.status] || "UNKNOWN" }))
-          );
+            el("p", { className: "prod", textContent: s.hint }),
+            el("span", { className: "pill " + s.cls, textContent: s.name }));
           if (c.status === 0) {
-            card.append(el("button", { textContent: "Accept credit", onclick: (ev) => act(a.pubkey, "accept_credit", ev.target) }));
-            card.append(el("button", { className: "alt", textContent: "Decline", onclick: (ev) => act(a.pubkey, "decline_credit", ev.target) }));
+            card.append(el("div", { className: "row2" },
+              el("button", { className: "primary", textContent: "Accept credit", onclick: (ev) => act(pk, "accept_credit", ev.target) }),
+              el("button", { className: "ghost", textContent: "Decline", onclick: (ev) => act(pk, "decline_credit", ev.target) })));
           } else {
-            card.append(el("a", { href: "https://explorer.solana.com/address/" + a.pubkey.toBase58() + "?cluster=devnet", target: "_blank", rel: "noopener", textContent: "View on explorer" }));
+            card.append(el("br"), el("a", { className: "link", href: "https://explorer.solana.com/address/" + pk.toBase58() + "?cluster=devnet", target: "_blank", rel: "noopener", textContent: "View on explorer" }));
           }
           box.append(card);
         }
-      } catch (e) { box.replaceChildren(); log("Load failed: " + (e.message || e)); }
+        box.append(el("button", { className: "ghost", style: "width:100%", textContent: "Create another demo credit", onclick: (ev) => demo(ev.target) }));
+      } catch (e) { box.replaceChildren(el("div", { className: "card empty" }, el("p", { textContent: friendly(e) }), el("button", { className: "ghost", textContent: "Try again", onclick: () => load() }))); log("Load failed: " + (e.message || e)); }
     }
 
-    async function disc(name) {
-      const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("global:" + name));
-      return Buffer.from(new Uint8Array(h).slice(0, 8));
-    }
-
+    async function disc(name) { const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("global:" + name)); return Buffer.from(new Uint8Array(h).slice(0, 8)); }
     const u32 = (n) => { const b = Buffer.alloc(4); b.writeUInt32LE(n, 0); return b; };
     const str = (t) => { const b = Buffer.from(new TextEncoder().encode(t)); return Buffer.concat([u32(b.length), b]); };
-    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
     async function send(ixs) {
       const payer = new PublicKey(current.account.address);
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+      const { blockhash, lastValidBlockHeight } = await rpc(() => connection.getLatestBlockhash("confirmed"));
       const tx = new Transaction({ feePayer: payer, blockhash, lastValidBlockHeight }).add(...ixs);
       const bytes = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
       const f = current.wallet.features;
-      log("Asking your wallet to sign...");
+      sheet.text("Approve in your wallet\u2026");
       if (f["solana:signAndSendTransaction"]) {
         const [{ signature }] = await f["solana:signAndSendTransaction"].signAndSendTransaction({ account: current.account, chain: CHAIN, transaction: bytes });
         const { default: bs58 } = await import("https://esm.sh/bs58@5");
         return bs58.encode(signature);
       }
       const [{ signedTransaction }] = await f["solana:signTransaction"].signTransaction({ account: current.account, chain: CHAIN, transaction: bytes });
-      return await connection.sendRawTransaction(signedTransaction);
+      return await rpc(() => connection.sendRawTransaction(signedTransaction));
+    }
+
+    async function waitFor(pk, ok) {
+      for (let i = 0; i < 20; i++) {
+        await sleep(1500);
+        try { const info = await connection.getAccountInfo(pk, "confirmed"); if (ok(info)) return true; } catch (e) {}
+      }
+      return false;
     }
 
     async function act(creditPk, name, btn) {
+      const accept = name === "accept_credit";
       btn.disabled = true;
+      sheet.open(accept ? "Accepting your credit" : "Declining credit", "Preparing\u2026");
       try {
         const payer = new PublicKey(current.account.address);
-        const ix = new TransactionInstruction({
-          programId,
-          keys: [{ pubkey: creditPk, isSigner: false, isWritable: true }, { pubkey: payer, isSigner: true, isWritable: false }],
-          data: await disc(name),
-        });
+        const ix = new TransactionInstruction({ programId, keys: [{ pubkey: creditPk, isSigner: false, isWritable: true }, { pubkey: payer, isSigner: true, isWritable: false }], data: await disc(name) });
         const sig = await send([ix]);
-        log("Sent. Waiting for the chain...");
-        for (let i = 0; i < 20; i++) {
-          await sleep(1500);
-          const info = await connection.getAccountInfo(creditPk, "confirmed");
-          if (info && parseCredit(info.data).status !== 0) break;
-        }
-        log("Done: https://explorer.solana.com/tx/" + sig + "?cluster=devnet");
+        sheet.text("Confirming onchain\u2026");
+        await waitFor(creditPk, (info) => info && parseCredit(info.data).status !== 0);
+        log("Done: " + sig);
+        sheet.ok(accept ? "Credit verified" : "Credit declined", accept ? "It's signed by you and recorded onchain." : "Recorded onchain.", "https://explorer.solana.com/tx/" + sig + "?cluster=devnet");
         await load();
-      } catch (e) { log("Failed: " + (e.message || e)); btn.disabled = false; }
+      } catch (e) { log("Failed: " + (e.message || e)); sheet.fail(friendly(e)); btn.disabled = false; }
     }
 
     async function demo(btn) {
       btn.disabled = true;
+      sheet.open("Creating a demo credit", "Preparing\u2026");
       try {
         const me = new PublicKey(current.account.address);
         const slug = "demo-" + Date.now().toString().slice(-8);
         const [production] = PublicKey.findProgramAddressSync([Buffer.from("production"), me.toBuffer(), Buffer.from(slug)], programId);
         const [credit] = PublicKey.findProgramAddressSync([Buffer.from("credit"), production.toBuffer(), me.toBuffer()], programId);
         const sys = web3.SystemProgram.programId;
-        const ix1 = new TransactionInstruction({
-          programId,
-          keys: [
-            { pubkey: production, isSigner: false, isWritable: true },
-            { pubkey: me, isSigner: true, isWritable: true },
-            { pubkey: sys, isSigner: false, isWritable: false },
-          ],
-          data: Buffer.concat([await disc("create_production"), str(slug), str("Demo: Short Film")]),
-        });
-        const ix2 = new TransactionInstruction({
-          programId,
-          keys: [
-            { pubkey: production, isSigner: false, isWritable: true },
-            { pubkey: credit, isSigner: false, isWritable: true },
-            { pubkey: me, isSigner: false, isWritable: false },
-            { pubkey: me, isSigner: true, isWritable: true },
-            { pubkey: sys, isSigner: false, isWritable: false },
-          ],
-          data: Buffer.concat([await disc("propose_credit"), str("Gaffer")]),
-        });
+        const ix1 = new TransactionInstruction({ programId, keys: [
+          { pubkey: production, isSigner: false, isWritable: true }, { pubkey: me, isSigner: true, isWritable: true }, { pubkey: sys, isSigner: false, isWritable: false }],
+          data: Buffer.concat([await disc("create_production"), str(slug), str("Demo: Short Film")]) });
+        const ix2 = new TransactionInstruction({ programId, keys: [
+          { pubkey: production, isSigner: false, isWritable: true }, { pubkey: credit, isSigner: false, isWritable: true }, { pubkey: me, isSigner: false, isWritable: false },
+          { pubkey: me, isSigner: true, isWritable: true }, { pubkey: sys, isSigner: false, isWritable: false }],
+          data: Buffer.concat([await disc("propose_credit"), str("Gaffer")]) });
         const sig = await send([ix1, ix2]);
-        log("Sent. Waiting for the chain...");
-        for (let i = 0; i < 20; i++) {
-          await sleep(1500);
-          if (await connection.getAccountInfo(credit, "confirmed")) break;
-        }
-        log("Created: https://explorer.solana.com/tx/" + sig + "?cluster=devnet");
+        sheet.text("Confirming onchain\u2026");
+        await waitFor(credit, (info) => !!info);
+        log("Created: " + sig);
+        sheet.ok("Demo credit created", "Your Gaffer credit is waiting for you to accept it.", "https://explorer.solana.com/tx/" + sig + "?cluster=devnet");
         await load();
-      } catch (e) { log("Failed: " + (e.message || e)); }
+      } catch (e) { log("Failed: " + (e.message || e)); sheet.fail(friendly(e)); }
       btn.disabled = false;
     }
-  } catch (e) { log("Startup failed: " + (e.message || e)); }
+  } catch (e) { log("Startup failed: " + (e.message || e)); toast("Couldn't start. Check your connection and reload."); }
 })();
 </script>
 </body>
