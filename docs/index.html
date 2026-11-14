@@ -278,7 +278,19 @@ $("sheet").addEventListener("click", (e) => { if (e.target.id === "sheet") sheet
     const programId = new PublicKey(PROGRAM);
     const connection = new Connection(RPC, { commitment: "confirmed", disableRetryOnRateLimit: true });
     const dir = location.origin + location.pathname.replace(/[^/]*$/, "");
-    mwa.registerMwa({ appIdentity: { name: "Rolling Credits", uri: dir, icon: "icon-192.png" }, chains: [CHAIN] });
+    const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    if (!IOS) { try { mwa.registerMwa({ appIdentity: { name: "Rolling Credits", uri: dir, icon: "icon-192.png" }, chains: [CHAIN] }); } catch (e) { log("MWA unavailable: " + (e.message || e)); } }
+    // Fallback for wallets that only inject a legacy provider (such as Solflare's in-app browser)
+    function legacyWallet(p, name) {
+      return { name, features: {
+        "standard:connect": { connect: async () => { await p.connect(); return { accounts: [{ address: (p.publicKey || p.pubkey).toString() }] }; } },
+        "solana:signTransaction": { signTransaction: async ({ transaction }) => { const signed = await p.signTransaction(Transaction.from(transaction)); return [{ signedTransaction: signed.serialize() }]; } },
+      } };
+    }
+    function legacyProvider() {
+      const p = window.solflare && window.solflare.isSolflare ? window.solflare : null;
+      return p ? legacyWallet(p, "Solflare") : null;
+    }
     const registry = std.getWallets();
     let current = null;
 
@@ -298,12 +310,23 @@ $("sheet").addEventListener("click", (e) => { if (e.target.id === "sheet") sheet
       box.replaceChildren();
       if (current) return;
       const found = registry.get().filter((w) => w.features["standard:connect"] && Object.keys(w.features).some((f) => f.startsWith("solana:")));
-      if (!found.length) { box.append(el("p", { className: "note", textContent: "No wallet found. Open this app on an Android phone with Phantom, Solflare or Seed Vault installed." })); return; }
+      if (!found.some((w) => /solflare/i.test(w.name))) { const lw = legacyProvider(); if (lw) found.push(lw); }
+      if (!found.length) {
+        if (IOS) {
+          const link = "https://solflare.com/ul/v1/browse/" + encodeURIComponent(location.href.split("#")[0]) + "?ref=" + encodeURIComponent(location.origin);
+          box.append(el("a", { className: "primary", href: link, textContent: "Open in Solflare", style: "display:block;text-align:center;text-decoration:none" }));
+          box.append(el("p", { className: "note", textContent: "On iPhone, this app runs inside Solflare's built-in browser. Tap the button, or open the Solflare app, go to its browser tab and enter this page's address. Set Solflare to Devnet first." }));
+        } else {
+          box.append(el("p", { className: "note", textContent: "No wallet found. Open this app on an Android phone with Phantom, Solflare or Seed Vault installed." }));
+        }
+        return;
+      }
       found.forEach((w) => box.append(el("button", { className: "primary", textContent: found.length > 1 ? "Connect " + w.name : "Connect wallet", onclick: () => connect(w) })));
       box.append(el("p", { className: "note", textContent: "Set your wallet to Devnet first." }));
     }
     registry.on("register", renderWallets);
     renderWallets();
+    [400, 1200, 2500].forEach((t) => setTimeout(renderWallets, t));
 
     async function connect(w) {
       try {
