@@ -135,6 +135,20 @@ Rounding: flooring leaves at most a few base units per recipient in the vault. A
 - All arithmetic is checked. No silent overflow.
 - An independent security review is a roadmap milestone, published in full before mainnet.
 
+## Survivability test (design principle)
+
+Rolling Credits must outlive any single app, including Ourobor.OS. An implementation passes if:
+
+1. **Offline verification:** every credit and co-signature can be checked from the record and public keys alone.
+2. **Owner-held data:** records belong to their owners, in an open, documented format, and can be exported at any time.
+3. **Works without a network:** credits can be created, read and co-signed locally, then synced later.
+4. **No single point of failure:** no required server, company or domain.
+5. **Exit route:** a documented, tested export and import, so another app can take over.
+
+Recording a revenue split is part of the protocol. Moving the money is not, and needs a payment rail.
+
+**Status: not yet met.** This is a goal, not a claim. The v0.1 design stores credits in on-chain accounts, so creating and co-signing a credit needs a network connection, and nothing here yet defines an export format or offline verification. See the open questions below.
+
 ## SDK (planned)
 
 TypeScript on `@solana/kit`, wrapping every instruction, plus React Native hooks for Mobile Wallet Adapter. Target developer flow:
@@ -152,5 +166,6 @@ TypeScript on `@solana/kit`, wrapping every instruction, plus React Native hooks
 - Dust: let the authority sweep rounding remainders after a set period, or leave them?
 - Should a split be closable once fully claimed, to recover rent?
 - Should `propose_credit` be open to delegates, such as a production coordinator, not just the owner?
+- Survivability: what is the open export format for credits and co-signatures, and can a signed credit be verified offline without reading the chain?
 
 Feedback on any of these is welcome. Open an issue.
